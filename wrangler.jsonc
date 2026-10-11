@@ -1,0 +1,72 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "line-home-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-03",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "EVENT_SEARCH_PROVIDER": "live",
+    "GEMINI_MODEL": "gemini-flash-latest",
+    "GEMINI_FALLBACK_MODELS": "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite",
+    "GEMINI_MEMORY_MODEL": "gemini-3.5-flash-lite",
+    "DEFAULT_THINKING_LEVEL": "medium",
+    "BOT_DISPLAY_NAME": "Home AI",
+    "MEMORY_BATCH_SIZE": "24",
+    "RECENT_MESSAGE_LIMIT": "40",
+    "MAX_MEDIA_CONTEXT": "3",
+    "GEMINI_MODEL_TIMEOUT_MS": "30000",
+    "GEMINI_REPLY_DEADLINE_MS": "60000",
+    "GEMINI_DEEP_DEADLINE_MS": "180000",
+    "GEMINI_MEMORY_TIMEOUT_MS": "45000",
+    "LINE_API_TIMEOUT_MS": "10000",
+    "IMPLICIT_FOLLOWUP_WINDOW_MS": "600000",
+    "MEDIA_STORAGE_LIMIT_BYTES": "300000000",
+    "MEDIA_MAX_FILE_BYTES": "16777216"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "line-home-ai-db",
+      "database_id": "eca62062-7b5a-423f-bb61-d26916f1d7ec"
+    },
+    {
+      "binding": "MEDIA_DB",
+      "database_name": "line-home-ai-media-db",
+      "database_id": "0d8343c4-5afc-4d00-a8b7-e6b5887b5238"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "EVENT_QUEUE",
+        "queue": "line-home-ai-events"
+      },
+      {
+        "binding": "MEMORY_QUEUE",
+        "queue": "line-home-ai-memory"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "line-home-ai-events",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "dead_letter_queue": "line-home-ai-dead-letter",
+        "max_concurrency": 1
+      },
+      {
+        "queue": "line-home-ai-memory",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "dead_letter_queue": "line-home-ai-memory-dead-letter",
+        "max_concurrency": 1
+      }
+    ]
+  },
+  "preview_urls": false
+}

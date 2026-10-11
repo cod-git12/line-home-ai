@@ -1,0 +1,81 @@
+# line-home-ai
+
+A production-oriented **LINE family group AI** for two approved household members, using:
+
+- LINE Messaging API
+- Cloudflare Workers + Queues
+- Cloudflare D1
+- Cloudflare D1 (dedicated attachment database; no R2 subscription required)
+- Gemini Flash latest + quota fallback routing
+
+The repository is designed so that after Git deployment, the human setup is **UI configuration only**: create/enable the LINE Messaging API account, obtain the Gemini API key, import this repository into Cloudflare, enter four secrets, and register the LINE webhook. The two existing D1 databases are explicitly bound in `wrangler.jsonc`; the existing Queues are maintained. Forks must set their own D1 IDs. R2 is not provisioned.
+
+## What it does
+
+- Lives in one dedicated LINE family group.
+- Distinguishes the two approved people by LINE `userId`.
+- Stores approved-member ordinary conversation as context without interrupting it.
+- Starts an AI turn when explicitly called (`@Home AI`, `GPT、`, `AI、`, typed `HOME-AI`), via `/deep`, or by quoting/replying to an AI message.
+- Once Home AI has just replied, the next unquoted household message is treated as a natural follow-up for up to 10 minutes, so ordinary back-and-forth does not require another `@Home AI` on every turn. A reply/quote or explicit LINE mention directed at the other household member suppresses this adjacency inference.
+- Supports LINE text, location, sticker metadata, images, audio, video and files.
+- Stores binary media in a dedicated D1 database and includes recent relevant media in Gemini multimodal context.
+- Stores at most **300 MB raw attachments total / 16 MiB per file**, using atomic D1 transactions and checksums. `/usage` shows persisted bytes. This is smaller than the former R2 capacity. No automatic data eviction or new billing subscription is used.
+- Separates raw chat history, summaries and long-term memory.
+- Runs memory maintenance as separate Queue jobs so it does not consume the LINE reply path's D1 query/latency budget.
+- Uses a dedicated memory model (`GEMINI_MEMORY_MODEL`) so long-term-memory extraction does not spend the primary conversation model's quota.
+- Uses `gemini-flash-latest` as the primary conversation model, following Google's latest Flash alias updates automatically. Concrete fallback models remain available when the primary fails.
+- Uses conversation context to recognize outing/event questions, resolve dates in Japan time, and search Hamamatsu by default with Gemini 2.5 Search grounding and cited links. Search attempts are reserved in D1 before each call, with a 450-per-day application limit.
+- On HTTP 429, does **not** retry the same exhausted model. It moves through the configured `GEMINI_FALLBACK_MODELS` ladder. When fallback succeeds, LINE first sends a model-switch notice and then the original answer from the lower model.
+- Invalidates derived memory and summaries when the originating LINE message is unsent.
+- Provides explicit memory/persona/thinking/admin/data-deletion commands.
+- Uses HMAC-SHA256 webhook signature verification and a one-time single-group bind.
+- Uses short-lived stateless LINE access tokens automatically; no long-lived access token secret is required.
+- Uses Gemini Interactions API with `store:false`.
+- Uses Queue + `webhookEventId` idempotency, persistent LINE Push retry keys, explicit delivery state, bounded retries and a dead-letter queue.
+
+The intended deployment is a **dedicated group containing only the two household members and Home AI**. Application-level approval prevents unapproved users' ordinary messages from being stored or sent to Gemini, but it cannot hide bot replies from other humans who are physically present in the LINE group.
+
+## Gemini model routing
+
+Current defaults are configured in `wrangler.jsonc`, not hard-coded into the response logic:
+
+```text
+Conversation primary: gemini-flash-latest
+Fallbacks: gemini-3.7-flash → gemini-3.6-flash → gemini-3.5-flash → gemini-3.5-flash-lite → gemini-3.1-flash-lite
+Long-term memory: gemini-3.5-flash-lite
+```
+
+A 429 from one conversation model causes one attempt on the next model; the exhausted model is not repeatedly retried. Transient 408/5xx failures still receive bounded retry handling.
+
+## Start here
+
+**[UI-only production setup guide / UIだけで行う本番セットアップ](docs/SETUP.md)**
+
+Design details: **[Architecture](docs/ARCHITECTURE.md)**
+
+Attachment limits and migration: **[D1 media storage](docs/D1_MEDIA.md)**
+
+Google AI Pro benefits, API billing requirements, event search and HTTP 400 handling: **[Google AI and Search / 日本語](docs/GOOGLE_AI_AND_SEARCH.md)**
+
+## Required Cloudflare secrets
+
+`LINE_CHANNEL_ID`, `LINE_CHANNEL_SECRET`, `GEMINI_API_KEY`, `SETUP_CODE`
+
+## Health endpoint
+
+`GET /health` — returns `ready:true` only when all four required secrets are present and includes the configured model route, isolated Queue state, latency bounds and implicit follow-up configuration.
+
+`upstreamCheck` reports a once-per-release smoke check using fixed, non-personal prompts. The first health request queues this check; repeated requests and duplicate queue deliveries cannot repeat it. It checks Gemini generation and a public Hamamatsu event search without sending anything to LINE. `ready` describes configuration/database readiness; `upstreamCheck.state` separately records actual upstream success or a safe error category.
+
+## Webhook endpoint
+
+`POST /webhook`
+
+## Quality checks
+
+```bash
+npm install --no-audit --no-fund
+npm run check
+```
+
+`npm run check` performs strict TypeScript checking, automated contract/unit tests, and a Wrangler deployment dry-run. CI runs the same command on every push/PR.
