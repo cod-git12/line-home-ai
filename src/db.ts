@@ -54,8 +54,8 @@ export async function createJoinRequest(env: Env, groupId: string, userId: strin
 export async function approveJoin(env: Env, groupId: string, code: string): Promise<MemberRow | null> {
   const req = await env.DB.prepare("SELECT user_id,display_name FROM join_requests WHERE code=? AND group_id=? AND status='pending' AND expires_at>?").bind(code.toUpperCase(), groupId, nowMs()).first<{user_id:string;display_name:string}>();
   if (!req) return null;
-  const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM members WHERE group_id=? AND active=1").bind(groupId).first<number>("n") ?? 0;
-  if (count >= 2) throw new Error("This deployment is configured for two approved family members.");
+  //const count = await env.DB.prepare("SELECT COUNT(*) AS n FROM members WHERE group_id=? AND active=1").bind(groupId).first<number>("n") ?? 0;
+  //if (count >= 2) throw new Error("This deployment is configured for two approved family members.");
   const now = nowMs();
   await env.DB.batch([
     env.DB.prepare("INSERT INTO members(group_id,user_id,display_name,role,approved_at,active) VALUES(?,?,?,'member',?,1) ON CONFLICT(group_id,user_id) DO UPDATE SET display_name=excluded.display_name, role='member', approved_at=excluded.approved_at, active=1").bind(groupId, req.user_id, req.display_name, now),
