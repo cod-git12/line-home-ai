@@ -100,7 +100,7 @@ export async function runCommand(ctx: CommandContext, name: string, args: string
       const s=await stats(env,groupId); const members=await listMembers(env,groupId); const group=await getGroup(env,groupId);
       const lastError=await readLastGeminiError(env).catch(()=>null);
       const diagnostic=lastError ? `\n\n直近のAPIエラー記録（現在の障害とは限りません）\nHTTP ${lastError.status} / ${lastError.category}\nモデル: ${lastError.model}\n記録時刻: ${new Date(lastError.time).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"})} JST` : "";
-      return {text:`Home AI 稼働中\nモデル: ${env.GEMINI_MODEL}\nThinking: ${group?.thinking_level ?? env.DEFAULT_THINKING_LEVEL}\n登録メンバー: ${members.length}/2\n保存メッセージ: ${s.messages}\n有効な長期記憶: ${s.memories}\n要約セグメント: ${s.summaries}${diagnostic}`};
+      return {text:`Home AI 稼働中\nモデル: ${env.GEMINI_MODEL}\nThinking: ${group?.thinking_level ?? env.DEFAULT_THINKING_LEVEL}\n登録メンバー: ${members.length}\n保存メッセージ: ${s.messages}\n有効な長期記憶: ${s.memories}\n要約セグメント: ${s.summaries}${diagnostic}`};
     }
     case "usage": {
       const m=requireMember(ctx); if(typeof m==="string") return {text:m};
